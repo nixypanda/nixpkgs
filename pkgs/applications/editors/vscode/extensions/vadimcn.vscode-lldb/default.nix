@@ -1,6 +1,6 @@
-{ pkgs, lib, stdenv, fetchFromGitHub, runCommand, rustPlatform, makeWrapper, llvmPackages
-, buildNpmPackage, cmake, nodejs, unzip, python3, pkg-config, libsecret, darwin
-}:
+{ pkgs, lib, stdenv, fetchFromGitHub, runCommand, rustPlatform, makeWrapper
+, llvmPackages, buildNpmPackage, cmake, nodejs, unzip, python3, pkg-config
+, libsecret, darwin }:
 assert lib.versionAtLeast python3.version "3.5";
 let
   publisher = "vadimcn";
@@ -19,7 +19,8 @@ let
   };
 
   # need to build a custom version of lldb and llvm for enhanced rust support
-  lldb = (import ./lldb.nix { inherit fetchFromGitHub runCommand llvmPackages; });
+  lldb =
+    (import ./lldb.nix { inherit fetchFromGitHub runCommand llvmPackages; });
 
   adapter = rustPlatform.buildRustPackage {
     pname = "${pname}-adapter";
@@ -27,16 +28,18 @@ let
 
     cargoHash = "sha256-e/Jki/4pCs0qzaBVR4iiUhdBFmWlTZYREQkuFSoWYFo=";
 
+    buildInputs = lib.optionals stdenv.isDarwin [ lldb ];
+
     nativeBuildInputs = [ makeWrapper ];
+
+    env =
+      lib.optionalAttrs stdenv.isDarwin { NIX_LDFLAGS = "-llldb -lc++abi"; };
 
     buildAndTestSubdir = "adapter";
 
     buildFeatures = [ "weak-linkage" ];
 
-    cargoBuildFlags = [
-      "--lib"
-      "--bin=codelldb"
-    ];
+    cargoBuildFlags = [ "--lib" "--bin=codelldb" ];
 
     postFixup = ''
       mkdir -p $out/share/{adapter,formatters}
@@ -65,17 +68,10 @@ let
 
     npmDepsHash = "sha256-fMKGi+AJTMlWl7SQtZ21hUwOLgqlFYDhwLvEergQLfI=";
 
-    nativeBuildInputs = [
-      python3
-      pkg-config
-    ];
+    nativeBuildInputs = [ python3 pkg-config ];
 
-    buildInputs = [
-      libsecret
-    ] ++ lib.optionals stdenv.isDarwin (with darwin.apple_sdk.frameworks; [
-      Security
-      AppKit
-    ]);
+    buildInputs = [ libsecret ] ++ lib.optionals stdenv.isDarwin
+      (with darwin.apple_sdk.frameworks; [ Security AppKit ]);
 
     dontNpmBuild = true;
 
